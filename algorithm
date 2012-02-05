@@ -1,0 +1,42 @@
+===================== COUNTERS, REGISTERS, SIGNALS =========================
+
+countClock;	// total number of clock cycles
+
+countInstr;	// total number of instructions
+
+countAND;	// number of times AND was executed
+countTAD;	// number of times TAD was executed
+countISZ; 	// number of times ISZ was executed
+countDCA;	// number of times DCA was executed
+countJMS;	// number of times JMS was executed
+countJMP;	// number of times JMP was executed
+countIO;	// number of times IO was executed
+countMicro;	// number of times Micro was executed
+
+regAccumulator;	// bit 0: link bit, accumulator bits 1-11
+regPC;		// holds address of next instruction
+regInst;	// holds op-code of current instruction
+regMemBuff;	// holds value read from memory OR value to be written
+regCPMA;	// holds address to be read from or written to in memory
+regSwitch;	// used to load memory from console
+
+signalRead;	// de-asserted 0, asserted 1
+signalWrite;	// de-asserted 0, asserted 1
+
+#define PAGES 32
+#define WORDS 128
+
+memPage;	// which of the 32 pages in memory
+memOffset;	// which 128 12-bit word on that page
+
+============================= ALGORITHM ====================================
+
+get input from file
+parse for presence of @
+
+if address,
+	regPC = address;
+	memPage = bits 0-4;
+	memOffset = bits 5-11;
+
+
