@@ -1,7 +1,7 @@
 ===================== COUNTERS, REGISTERS, SIGNALS =========================
 
 #define PAGES 32
-#define WORDS 128
+#define BYTES 128
 
 uint32_t countClock;	// total number of clock cycles
 
@@ -27,7 +27,7 @@ struct regAC {		// struct .linkbit = 0, .accbits = 0-11
   uint32_t accbits;
 };
 
-struct regMRI {
+struct regMRI {		// memory instruction register
   int opcode;
   int indirectBit;
   int memPageBit;
@@ -137,7 +137,7 @@ else
 
 ============================== SUPPORTING FUNCTIONS ========================
 
-void updatePC(uint32_t addr)
+int updatePC(uint32_t addr)
 {
   regPC.addr = address;
   regPC.memPage = bits 0-4;
