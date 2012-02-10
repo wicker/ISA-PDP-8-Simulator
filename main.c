@@ -26,23 +26,36 @@ uint32_t countJMP;	// number of times JMP was executed
 uint32_t countIO;	// number of times IO was executed
 uint32_t countMicro;	// number of times Micro was executed
 
-struct regPC {		// holds address of next instruction
+typedef struct {	// holds address of next instruction
   uint32_t addr;
   int memPage;
   int memOffset;
-};
+} registerPC;
 
-struct regAC {		// struct .linkbit = 0, .accbits = 0-11
+typedef struct {	// struct .linkbit = 0, .accbits = 0-11
+  uint32_t addr;
   int linkbit;
   uint32_t accbits;
-};
+} registerAC;
 
-struct regMRI {		// memory instruction register
+typedef struct {	// memory instruction register
   int opcode;
   int indirectBit;
   int memPageBit;
   int offset;
-};
+} registerMRI;
+
+int updatePC(uint32_t addr);
+int getOpCode(uint32_t instruction);
+void handleMRI(uint32_t i);
+
+// Initialize a 2-dimensional (32 pages x 128 bytes) simulation of PDP-8 memory
+
+int memory[PAGES][BYTES];
+
+registerPC regPC;
+registerAC regAC;
+registerMRI regMRI;
 
 uint32_t regCPMA;	// holds address to be read/written from/to memory
 
@@ -54,33 +67,6 @@ int signalWrite;	// de-asserted 0, asserted 1
 
 uint32_t memPage;	// which of the 32 pages in memory
 uint32_t memOffset;	// which 128 12-bit word on that page
-
-int updatePC(uint32_t addr)
-{
-  regPC.addr = address;
-  regPC.memPage = bits 0-4;
-  regPC.memOffset = bits 5-11;
-  return 0;
-}
-
-int getOpCode(uint32_t instruction)
-{
-  int opcode;
-  opcode = bits 0-2;
-  return opcode;
-}
-
-void handleMRI(uint32_t instruction, int opcode)
-{
-  regMRI.opcode = opcode;
-  regMRI.indirectBit = bit 3;
-  regMRI.memPageBit = bit 4;
-  regMRI.offset = offset;
-}
-
-// Initialize a 2-dimensional (32 pages x 128 bytes) simulation of PDP-8 memory
-
-int memory[PAGES][BYTES];
 
 FILE *ifp,*ofp;
 
@@ -94,36 +80,42 @@ int main()
   ofp = fopen("tracefile.din", "a");
 
   // set it up to read line by line, set n and addr accordingly
+  int opcode;
+  uint32_t i;
+  int carryout; // need to define/fix this
   char input[5];
+
   while (fscanf(ifp, "%s\n", &input) != EOF)
   {
+    i = input[1]*256 + input[2]*16 + input[3];
     // treat intput line as an address
     if (input[0] == '@')
-       updatePC(input[1],input[2],input[3]) // treat as memory address
-
+    {
+       updatePC(i);
+    }
     // treat input line as an instruction
     else 
     {
       // input line is not a memory reference instruction
-      opcode = getOpCode(input);
+      opcode = i >> 9;
       if (opcode == 6 || opcode == 7)
       {
-        deal with opcode 6 or 7;
+        printf("deal with opcode 6 or 7\n");
       }
 
       // input line is just wrong
       else if (opcode > 7)
       {
-        print error message to stderror;
+        printf("opcode %d is greater than 7\n",opcode);
       }
 
       // treat input line as a memory reference instruction
       else
       { 
-        handleMRI(input, opcode);
+        handleMRI(i);
         if (regMRI.memPageBit == 0)
         {
-          regCPMA = 00000 + regMRI.offset;
+          regCPMA = 0x0 + regMRI.offset;
         }
         else if (regMRI.memPageBit == 1 && regMRI.indirectBit == 1)
         {
@@ -131,27 +123,27 @@ int main()
         }
         else if (regMRI.memPageBit == 1 && regMRI.indirectBit == 0)
         {
-          regCPMA = mem[regPC.memPage][regMRI.offset];
+          regCPMA = memory[regPC.memPage][regMRI.offset];
         }
         else if (regMRI.memPageBit == 0 && regMRI.indirectBit == 0)
         {
-          if (0010o < offset < 0017o)
+          if (0x8 < regMRI.offset < 0x0f)
           {
-            regCPMA = mem[0][offset]++;
+            regCPMA = memory[0][regMRI.offset]++;
             countClock = countClock + 2;
           }
           else
           {
-            regCPMA = mem[0][offset];
+            regCPMA = memory[0][regMRI.offset];
             countClock++;
           }
         }
         else if (regMRI.memPageBit > 1 || regMRI.indirectBit > 1)
         {
-        print error message to stderror;
+          printf("this is not a possible case.\n");
         }
 
-        switch (instOpCode)
+        switch (regMRI.opcode)
         {
           case 0:
             countAND++;
@@ -166,8 +158,10 @@ int main()
           case 2:
             countISZ++;
             if (regCPMA == 0)
+            {
                regPC.addr++;
                updatePC(regPC.addr);
+            }
             else
                regCPMA++;
           case 3:
@@ -177,23 +171,50 @@ int main()
             regAC.linkbit = 0;
           case 4:
             countJMS++;
-            regCPMA = regPC;
+            regCPMA = regPC.addr;
             regPC.addr = regCPMA++;
-            updatePC(addr);
+            updatePC(regPC.addr);
           case 5:
             countJMP++;
             regPC.addr = regCPMA;
-            updatePC(addr);
+            updatePC(regPC.addr);
         } // end switch 
 
       } // end MRI handling
 
     } // end instruction handling
 
-  fclose(ifp,ofp);
+  } // end while loop
 
-  printf("Counter outputs go here.");
+  fclose(ifp);
+  fclose(ofp);
+
+  printf("Counter outputs go here.\n");
 
   return 0; 
 }
 
+// these functions are all need testing, testing for compiling right now
+
+int updatePC(uint32_t i)
+{
+  regPC.addr = i;
+  regPC.memPage = i >> 7;
+  regPC.memOffset = i & 0x7f;
+  return 0;
+}
+
+int getOpCode(uint32_t instruction)
+{
+  int opcode;
+  opcode = 0;
+  return opcode;
+}
+
+void handleMRI(uint32_t i)
+{
+  regMRI.opcode = i >> 9;
+  regMRI.indirectBit = i & 0x100;
+  regMRI.memPageBit = i & 0x80;
+  regMRI.offset = i & 0x7f;
+};
