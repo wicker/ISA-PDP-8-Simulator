@@ -45,7 +45,7 @@ typedef struct {	// memory instruction register
   int offset;
 } registerMRI;
 
-int updatePC(uint32_t addr);
+void updatePC(uint32_t i);
 int getOpCode(uint32_t instruction);
 void handleMRI(uint32_t i);
 
@@ -80,40 +80,40 @@ int main()
   ofp = fopen("tracefile.din", "a");
 
   // set it up to read line by line, set n and addr accordingly
-  int opcode;
   uint32_t i;
   int carryout; // need to define/fix this
   char input[5];
 
   while (fscanf(ifp, "%s\n", &input) != EOF)
   {
-    i = input[1]*256 + input[2]*16 + input[3];
     // treat intput line as an address
     if (input[0] == '@')
     {
-       updatePC(i);
+      i = input[1]*256 + input[2]*16 + input[3];
+      updatePC(i);
     }
     // treat input line as an instruction
     else 
     {
+      i = input[0]*256 + input[1]*16 + input[2];
       // input line is not a memory reference instruction
-      opcode = i >> 9;
-      if (opcode == 6 || opcode == 7)
+      regMRI.opcode = i >> 9;
+      if (regMRI.opcode == 6 || regMRI.opcode == 7)
       {
         printf("deal with opcode 6 or 7\n");
       }
 
       // input line is just wrong
-      else if (opcode > 7)
+      else if (regMRI.opcode > 7)
       {
-        printf("opcode %d is greater than 7\n",opcode);
+        printf("opcode %d is greater than 7\n",regMRI.opcode);
       }
 
       // treat input line as a memory reference instruction
       else
       { 
         handleMRI(i);
-        if (regMRI.memPageBit == 0)
+        if (regMRI.memPageBit == 0 && regMRI.indirectBit == 1)
         {
           regCPMA = 0x0 + regMRI.offset;
         }
@@ -127,7 +127,7 @@ int main()
         }
         else if (regMRI.memPageBit == 0 && regMRI.indirectBit == 0)
         {
-          if (0x8 < regMRI.offset < 0x0f)
+          if (0x8 < regMRI.offset < 0xf)
           {
             regCPMA = memory[0][regMRI.offset]++;
             countClock = countClock + 2;
@@ -196,12 +196,11 @@ int main()
 
 // these functions are all need testing, testing for compiling right now
 
-int updatePC(uint32_t i)
+void updatePC(uint32_t i)
 {
   regPC.addr = i;
   regPC.memPage = i >> 7;
   regPC.memOffset = i & 0x7f;
-  return 0;
 }
 
 int getOpCode(uint32_t instruction)
@@ -213,8 +212,7 @@ int getOpCode(uint32_t instruction)
 
 void handleMRI(uint32_t i)
 {
-  regMRI.opcode = i >> 9;
   regMRI.indirectBit = i & 0x100;
   regMRI.memPageBit = i & 0x80;
   regMRI.offset = i & 0x7f;
-};
+}
