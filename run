@@ -1,6 +1,7 @@
 #!/bin/bash
 # Run the PDP-8 ISA-level simulator
 
+clear
 make clean
 make all
 echo "_______________ OUTPUT ____________________"

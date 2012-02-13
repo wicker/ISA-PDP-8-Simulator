@@ -24,7 +24,7 @@ int countDCA;	// number of times DCA was executed
 int countJMS;	// number of times JMS was executed
 int countJMP;	// number of times JMP was executed
 int countIO;	// number of times IO was executed
-int countMicro;	// number of times Micro was executed
+int count7;	// number of times Micro was executed
 
 typedef struct {	// holds address of next instruction
   int addr;
@@ -124,41 +124,35 @@ int main()
     // treat input line as an address
     if (input[0] == '@')
     {
-      printf("input[1] = %d\n",input[1]);
-      printf("input[2] = %d\n",input[2]);
-      printf("input[3] = %d\n",input[3]);
       int input1 = getHex(input[1]);
-      printf("input1 = 0x%x\n",input1);
       int input2 = getHex(input[2]);
-      printf("input2 = 0x%x\n",input2);
       int input3 = getHex(input[3]);
-      printf("input3 = 0x%x\n",input3);
       i = input1*256 + input2*16 + input3;
-      printf("i = 0x%x\n",i);
       updatePC(i);
     }
     // treat input line as an instruction
     else 
     {
+      countInstr++;
       int input1 = getHex(input[0]);
       int input2 = getHex(input[1]);
       int input3 = getHex(input[2]);
       i = input1*256 + input2*16 + input3;
-      printf("i: %d\n",i);
       regMRI.opcode = i >> 9;
-      printf("regMRI.opcode = %d\n",regMRI.opcode);
       // input line is not a memory reference instruction
       if (regMRI.opcode == 6)
-      { 
-         printf("opcode 6 needs a nop with clock increment");
+      {
+         countIO++;
+         printf("Warning: an I/O instruction was not simulated.\n");
       }
       else if (regMRI.opcode == 7)
       {
+        count7++;
+        countClock++;
         int bit11;
         int groupbit;
         groupbit = (i << 8) & 1;
         bit11 = i & 1;
-        printf("groupbit = %d\n",groupbit);
         // dealing with a group 1 microinstruction
         if (groupbit == 0)
         {
@@ -245,7 +239,6 @@ int main()
       else
       { 
         handleMRI(i);
-        countInstr++;
         if (regMRI.memPageBit == 0 && regMRI.indirectBit == 1)
         {
           regCPMA = 0x0 + regMRI.offset;
@@ -273,28 +266,31 @@ int main()
         }
         else if (regMRI.memPageBit > 1 || regMRI.indirectBit > 1)
         {
-          printf("this is not a possible case.\n");
+          printf("regMRI.memPageBit = %d and regMRI.indirectBit = %d\n",
+                  regMRI.memPageBit,regMRI.indirectBit);
         }
 
         switch (regMRI.opcode)
         {
           case 0:
             countAND++;
+            countClock = countClock + 2;
             regAC.accbits = regCPMA & regAC.accbits;
             trace.n = 0;
-            trace.addr = i;
+            trace.addr = regCPMA;
             break;
           case 1:
             countTAD++;
+            countClock = countClock + 2;
+            regCPMA = -regCPMA;
             regAC.accbits = regCPMA & regAC.accbits;
-            if (carryout && regAC.linkbit == 0)
-               regAC.linkbit = 1;
-            else if (carryout && regAC.linkbit == 1)
-               regAC.linkbit = 0; 
+            if (carryout)
+               regAC.linkbit = -regAC.linkbit; 
             trace.n = 0;
-            trace.addr = i;
+            trace.addr = regCPMA;
             break;
           case 2:
+            countClock = countClock + 2;
             countISZ++;
             if (regCPMA == 0)
             {
@@ -304,30 +300,33 @@ int main()
             else
                regCPMA++;
             trace.n = 1;
-            trace.addr = i;
+            trace.addr = regCPMA;
             break;
           case 3:
+            countClock = countClock + 2;
             countDCA++;
             regCPMA = regAC.accbits;
             regAC.accbits = 0;
             regAC.linkbit = 0;
             trace.n = 1;
-            trace.addr = i;
+            trace.addr = regCPMA;
             break;
           case 4:
+            countClock = countClock + 2;
             countJMS++;
             regCPMA = regPC.addr;
             regPC.addr = regCPMA++;
             updatePC(regPC.addr);
             trace.n = 1;
-            trace.addr = i;
+            trace.addr = regCPMA;
             break;
           case 5:
             countJMP++;
+            countClock++;
             regPC.addr = regCPMA;
             updatePC(regPC.addr);
             trace.n = 2;
-            trace.addr = i;
+            trace.addr = regCPMA;
             break;
         } // end switch 
 
@@ -345,9 +344,9 @@ int main()
 
   printf("Total clock cycles: %d\n",countClock);
   printf("Total instructions: %d\n",countInstr);
-  printf("Counts: AND, TAD, ISZ, DCA, JMS, JMP\n"
-         "        %-4d %-4d %-4d %-4d %-4d %-4d\n",
-         countAND,countTAD,countISZ,countDCA,countJMS,countJMP);
+  printf("Counts: AND, TAD, ISZ, DCA, JMS, JMP, IO, Micro\n"
+         "        %-4d %-4d %-4d %-4d %-4d %-4d %-3d %-6d\n",
+         countAND,countTAD,countISZ,countDCA,countJMS,countJMP,countIO,count7);
 
   return 0; 
 }
@@ -370,24 +369,13 @@ int getOpCode(int instruction)
 
 void handleMRI(int i)
 {
-  regMRI.indirectBit = i & 0x100;
-  regMRI.memPageBit = i & 0x80;
+  regMRI.indirectBit = (i >> 8) & 1;
+  regMRI.memPageBit = (i >> 7) & 1;
   regMRI.offset = i & 0x7f;
-}
-
-void handleGroup1(int i)
-{
-
-}
-
-void handleGroup2(int i)
-{
-
 }
 
 int getHex(int num)
 {
-  printf("num: 0x%x\n",num);
   if (48 <= num && num <= 57)
      return num - 48;
   else if (97 <= num && num <= 102)
