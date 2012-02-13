@@ -33,7 +33,6 @@ typedef struct {	// holds address of next instruction
 } registerPC;
 
 typedef struct {	// struct .linkbit = 0, .accbits = 0-11
-  int addr;
   int linkbit;
   int accbits;
 } registerAC;
@@ -235,10 +234,10 @@ int main()
         {
           case 0:
             countAND++;
-            regAC.addr = regCPMA & regAC.addr;
+            regAC.accbits = regCPMA & regAC.accbits;
           case 1:
             countTAD++;
-            regAC.addr = regCPMA & regAC.addr;
+            regAC.accbits = regCPMA & regAC.accbits;
             if (carryout && regAC.linkbit == 0)
                regAC.linkbit = 1;
             else if (carryout && regAC.linkbit == 1)
@@ -254,8 +253,8 @@ int main()
                regCPMA++;
           case 3:
             countDCA++;
-            regCPMA = regAC.addr;
-            regAC.addr = 0;
+            regCPMA = regAC.accbits;
+            regAC.accbits = 0;
             regAC.linkbit = 0;
           case 4:
             countJMS++;
