@@ -1,0 +1,9 @@
+#!/bin/bash
+# Run the PDP-8 ISA-level simulator
+
+make clean
+make all
+echo "_______________ OUTPUT ____________________"
+./main
+echo "__________ GENERATED TRACEFILE ____________"
+cat tracefile.din

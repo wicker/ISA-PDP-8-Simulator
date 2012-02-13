@@ -70,6 +70,11 @@ typedef struct {
   int  bit11 : 1;
 } Group2bitfield;
 
+typedef struct {
+  int n;
+  int addr;
+} forTracefile;
+
 void updatePC(int i);
 int getOpCode(int instruction);
 void handleMRI(int i);
@@ -84,6 +89,8 @@ registerMRI regMRI;
 
 Group1bitfield group1;
 Group2bitfield group2;
+
+forTracefile trace;
 
 int regCPMA;	// holds address to be read/written from/to memory
 
@@ -274,6 +281,9 @@ int main()
           case 0:
             countAND++;
             regAC.accbits = regCPMA & regAC.accbits;
+            trace.n = 0;
+            trace.addr = i;
+            break;
           case 1:
             countTAD++;
             regAC.accbits = regCPMA & regAC.accbits;
@@ -281,6 +291,9 @@ int main()
                regAC.linkbit = 1;
             else if (carryout && regAC.linkbit == 1)
                regAC.linkbit = 0; 
+            trace.n = 0;
+            trace.addr = i;
+            break;
           case 2:
             countISZ++;
             if (regCPMA == 0)
@@ -290,23 +303,38 @@ int main()
             }
             else
                regCPMA++;
+            trace.n = 1;
+            trace.addr = i;
+            break;
           case 3:
             countDCA++;
             regCPMA = regAC.accbits;
             regAC.accbits = 0;
             regAC.linkbit = 0;
+            trace.n = 1;
+            trace.addr = i;
+            break;
           case 4:
             countJMS++;
             regCPMA = regPC.addr;
             regPC.addr = regCPMA++;
             updatePC(regPC.addr);
+            trace.n = 1;
+            trace.addr = i;
+            break;
           case 5:
             countJMP++;
             regPC.addr = regCPMA;
             updatePC(regPC.addr);
+            trace.n = 2;
+            trace.addr = i;
+            break;
         } // end switch 
 
-     } // end MRI handling
+        fprintf(ofp,"%d %o\n",trace.n,trace.addr);
+        fflush(ofp);
+
+      } // end MRI handling
 
     } // end instruction handling
 
