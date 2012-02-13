@@ -64,7 +64,7 @@ typedef struct {
   int    sma : 1;
   int    sza : 1;
   int    snl : 1;
-  int rotate : 1;
+  int    rev : 1;
   int    osr : 1;
   int    hlt : 1;
   int  bit11 : 1;
@@ -133,12 +133,14 @@ int main()
     // treat input line as an instruction
     else 
     {
-      i = input[0]*256 + input[1]*16 + input[2];
-      printf("input[0] = %d,input[1] = %d,input[2] = %d,input[3] = %d,i = %d\n",
-             input[0],input[1],input[2],input[3],i);
-      // input line is not a memory reference instruction
-      regMRI.opcode = i << 9;
+      int input1 = getHex(input[0]);
+      int input2 = getHex(input[1]);
+      int input3 = getHex(input[2]);
+      i = input1*256 + input2*16 + input3;
+      printf("i: %d\n",i);
+      regMRI.opcode = i >> 9;
       printf("regMRI.opcode = %d\n",regMRI.opcode);
+      // input line is not a memory reference instruction
       if (regMRI.opcode == 6)
       { 
          printf("opcode 6 needs a nop with clock increment");
@@ -164,8 +166,43 @@ int main()
            group1.rotate = (i << 1) & 1;
            group1.iac = i & 1;
 
-           // goup 1 micorinstructions here
-        } 
+           // group 1 microinstructions here
+
+           if (group1.cla == 1)
+           {
+              regAC.accbits = 0;
+           }
+           if (group1.cll == 1) 
+           {
+              regAC.linkbit = 0;
+           }
+           if (group1.cma == 1)
+           {
+              /* complement the accumulator */
+           }
+           if (group1.rar == 1)
+           {
+              if (group1.rotate == 0)
+                 /* rotate right 1 place */
+                 { printf("1"); }
+              else
+                 /* rotate right 2 places */
+                 { printf("1"); }
+           }
+           if (group1.ral == 1)
+           {
+              if (group1.rotate == 0)
+                 /* rotate left 1 place */
+                 { printf("1"); }
+              else
+                 /* rotate left 2 places */
+                 { printf("1"); }
+           }
+           if (group1.iac == 1)
+           {
+              regAC.accbits++;
+           }
+         }
         // dealing with a group 2 microinstruction
         else if (groupbit == 1 && bit11 == 0)
         {
@@ -175,12 +212,14 @@ int main()
            group2.sma = (i << 6) & 1;
            group2.sza = (i << 5) & 1;
            group2.snl = (i << 4) & 1;
-           group2.rotate = (i << 3) & 1;
+           group2.rev = (i << 3) & 1; // reverse for spa, sna, szl
            group2.osr = (i << 2) & 1;
            group2.hlt = (i << 1) & 1;
            group2.bit11 = bit11;
 
-           // goup 2 micorinstructions here
+           // group 2 microinstructions here
+
+           
         }
         // this is a nop, add in clock cycles as appropriate
         else
