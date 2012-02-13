@@ -174,9 +174,7 @@ int main()
               regAC.accbits = 0;
            }
            if (group1.cll == 1) 
-           {
               regAC.linkbit = 0;
-           }
            if (group1.cma == 1)
            {
               /* complement the accumulator */
@@ -194,10 +192,16 @@ int main()
            {
               if (group1.rotate == 0)
                  /* rotate left 1 place */
-                 { printf("1"); }
+              { 
+                 printf("1");
+                 
+              }
               else
                  /* rotate left 2 places */
-                 { printf("1"); }
+              { 
+                 printf("1");
+ 
+              }
            }
            if (group1.iac == 1)
            {
@@ -266,8 +270,7 @@ int main()
         }
         else if (regMRI.memPageBit > 1 || regMRI.indirectBit > 1)
         {
-          printf("regMRI.memPageBit = %d and regMRI.indirectBit = %d\n",
-                  regMRI.memPageBit,regMRI.indirectBit);
+          printf("Something's gone badly wrong.");
         }
 
         switch (regMRI.opcode)
