@@ -32,7 +32,6 @@ typedef struct {	// holds address of next instruction
   int memOffset;
 } registerPC;
 
-
 typedef struct {	// struct .linkbit = 0, .accbits = 0-11
   int linkbit;
   int accbits;
@@ -78,10 +77,11 @@ typedef struct {
   int addr;
 } forTracefile;
 
-void loadAllTheThings();
-void updatePC(int i);
+int loadAllTheThings();
+int updatePC(int i);
 int getOpCode(int instruction);
-void handleIR(int i);
+int handleIR(int i);
+int getEffAddr();
 
 // Initialize a 2-dimensional (32 pages x 128 bytes) simulation of PDP-8 memory
 
@@ -109,21 +109,26 @@ int main()
   ofp = fopen("tracefile.din", "a");
 
   // parse the input file and store instructions/data in memory as directed
-  loadAllTheThings();
+  int x;
+  x = loadAllTheThings();
+  printf("x = %d\n",x);
 
   // starting from the first address, use assembly file to make tracefile
   int i;
   i = regIR.addr;
-  updatePC(i);
+  x = updatePC(i);
+  printf("x = %d\n",x);
 
   int carryout; // still no idea what this is
  
   // while the instruction is not a halt, follow instructions
+  printf("group2.hlt = %d\n",group2.hlt);
   while (group2.hlt != 1)
   {
       countInstr++;
 
       // input line is an I/O instruction (not handled here)
+      printf("regIR.opcode = %d\n",regIR.opcode);
       if (regIR.opcode == 6)
       {
          countIO++;
@@ -227,45 +232,10 @@ int main()
 
       // treat input line as a memory reference instruction
       else
-      { 
+      {
         handleIR(i);
-        // calculate the effective address, store in regCPMA
-        // zero page, indirection
-        if (regIR.memPageBit == 0 && regIR.indirectBit == 1)
-        {
-          regCPMA = memory[0][regIR.offset];
-        }
-        // current page, indirection
-        else if (regIR.memPageBit == 1 && regIR.indirectBit == 1)
-        {
-          regCPMA = memory[regIR.page][regIR.offset];
-        }
-        // current page, no indirection
-        else if (regIR.memPageBit == 1 && regIR.indirectBit == 0)
-        {
-          regCPMA = regIR.page + regIR.offset;
-        }
-        // zero page, autoindexing (registers 0010o-0017o)
-        else if (regIR.memPageBit == 0 && regIR.indirectBit == 0)
-        {
-          if (0x8 < regIR.offset < 0xf)
-          {
-            regCPMA = memory[0][regIR.offset]++;
-            countClock = countClock + 2;
-          }
-          else
-          {
-            regCPMA = memory[0][regIR.offset];
-            countClock++;
-          }
-        }
-        else if (regIR.memPageBit > 1 || regIR.indirectBit > 1)
-        {
-          printf("Something's gone badly wrong.");
-        }
-
+        regCPMA = getEffAddr();
         updatePC(regCPMA);
-
         switch (regIR.opcode)
         {
           case 0:
@@ -346,7 +316,7 @@ int main()
 
 // these functions are all need testing, testing for compiling right now
 
-void updatePC(int i)
+int updatePC(int i)
 {
   regPC.addr = i;
   regPC.memPage = i >> 7;
@@ -360,7 +330,7 @@ int getOpCode(int instruction)
   return opcode;
 }
 
-void handleIR(int i)
+int handleIR(int i)
 {
   regIR.addr = i;
   regIR.page = i >> 7;
@@ -381,7 +351,7 @@ int getHex(int num)
      return -1;
 }
 
-void loadAllTheThings()
+int loadAllTheThings()
 {
   int count;
   int input1;
@@ -421,34 +391,70 @@ void loadAllTheThings()
     // treat input line as an instruction or data line
     else 
     {
-      // store the instruction at the correct place in memory
-      if (count == 1)
-      {
+      // store the instruction or data at the correct place in memory
          input1 = getHex(input[0]);
          input2 = getHex(input[1]);
          input3 = getHex(input[2]);
          i = input1*256 + input2*16 + input3;
          memory[regPC.memPage][regPC.memOffset] = i;
          updatePC(regPC.addr++);
-      }
-      // store the data line at the correct place in memory
-      // using PC here
-      else if (count == 2)
-      {
-         input1 = getHex(input[0]);
-         input2 = getHex(input[1]);
-         input3 = getHex(input[2]);
-         i = input1*256 + input2*16 + input3;
-         memory[regPC.memPage][regPC.memOffset] = i;
-         updatePC(regPC.addr++); 
-      }
-      else 
+
+      if (count == 0)
       {
          printf("The first line of the input file did not contain an @.");
       }
     }
   }
+        int x = 0;
+        int y = 0;
+        for (x; x < 30; x++)
+           {  
+              printf("%d: ",x);
+              for (y; y < 120; y++)
+              { 
+                 printf("%d ",memory[i][y]);
+              }
+              printf("\n");
+           }
   fclose(ifp);
+  return 0;
 }
 
-
+int getEffAddr()
+{
+        // calculate the effective address, store in regCPMA
+        // zero page, indirection
+        if (regIR.memPageBit == 0 && regIR.indirectBit == 1)
+        {
+          regCPMA = memory[0][regIR.offset];
+        }
+        // current page, indirection
+        else if (regIR.memPageBit == 1 && regIR.indirectBit == 1)
+        {
+          regCPMA = memory[regIR.page][regIR.offset];
+        }
+        // current page, no indirection
+        else if (regIR.memPageBit == 1 && regIR.indirectBit == 0)
+        {
+          regCPMA = regIR.page + regIR.offset;
+        }
+        // zero page, autoindexing (registers 0010o-0017o)
+        else if (regIR.memPageBit == 0 && regIR.indirectBit == 0)
+        {
+          if (0x8 < regIR.offset < 0xf)
+          {
+            regCPMA = memory[0][regIR.offset]++;
+            countClock = countClock + 2;
+          }
+          else
+          {
+            regCPMA = memory[0][regIR.offset];
+            countClock++;
+          }
+        }
+        else if (regIR.memPageBit > 1 || regIR.indirectBit > 1)
+        {
+          printf("Something's gone badly wrong.");
+        }
+	return regCPMA;
+}
