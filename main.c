@@ -114,21 +114,27 @@ int main()
   int i;
   i = regIR.addr; // from where we saved it during the load
   updatePC(i); // PC now has the address of the first instruction
-  handleIR(memory[regPC.memPage][regPC.memOffset]);
-  printf("regIR.opcode = %d\n",regIR.opcode);
 
   int carryout; // still no idea what this is
  
   // while the instruction is not a halt, follow instructions
   printf("group2.hlt = %d\n",group2.hlt);
-  while (group2.hlt != 1)
+  int c;
+  int opcode;
+  for (c = 0; c < 1; c++)
   {
       countInstr++;
 
+      i = memory[regPC.memPage][regPC.memOffset];
+      printf("i: %x\n",i);
+      opcode = i >> 9;
+      
       // treat input line as a memory reference instruction
-      if (regIR.opcode < 6)
+      if (opcode < 6)
       {
+        i = memory[regPC.memPage][regPC.memOffset];
         handleIR(i);
+        printf("regIR.opcode = %d\n",regIR.opcode);
         regCPMA = getEffAddr();
         updatePC(regCPMA);
         switch (regIR.opcode)
@@ -194,14 +200,14 @@ int main()
       }
 
       // input line is an I/O instruction (not handled here)
-      else if (regIR.opcode == 6)
+      else if (opcode == 6)
       {
          countIO++;
          printf("Warning: an I/O instruction was not simulated.\n");
       }
 
       // input line is a group 1, 2, or 3 microinstruction
-      else if (regIR.opcode == 7)
+      else if (opcode == 7)
       {
         count7++;
         countClock++;
@@ -290,7 +296,7 @@ int main()
       } // end opcode 7
 
       // if input line is just wrong
-      else if (regIR.opcode > 7)
+      else if (opcode > 7)
       {
          printf("opcode %d is greater than 7\n",regIR.opcode);
       }
