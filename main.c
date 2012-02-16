@@ -47,29 +47,29 @@ typedef struct {	// memory instruction register
 } registerIR;
 
 typedef struct {
-  int opcode : 3;
-  int   bit3 : 1;
-  int    cla : 1;
-  int    cll : 1;
-  int    cma : 1;
-  int    cml : 1;
-  int    rar : 1; 
-  int    ral : 1;
-  int rotate : 1;
-  int    iac : 1;
+  int opcode;
+  int   bit3;
+  int    cla;
+  int    cll;
+  int    cma;
+  int    cml;
+  int    rar; 
+  int    ral;
+  int rotate;
+  int    iac;
 } Group1bitfield;
 
 typedef struct {
-  int opcode : 3;
-  int   bit3 : 1;
-  int    cla : 1;
-  int    sma : 1;
-  int    sza : 1;
-  int    snl : 1;
-  int    rev : 1;
-  int    osr : 1;
-  int    hlt : 1;
-  int  bit11 : 1;
+  int  opcode;
+  int    bit3;
+  int     cla;
+  int     sma;
+  int     sza;
+  int     snl;
+  int     rev;
+  int     osr;
+  int     hlt;
+  int   bit11;
 } Group2bitfield;
 
 typedef struct {
@@ -81,6 +81,8 @@ int loadAllTheThings();
 int updatePC(int);
 int handleIR(int);
 int getEffAddr();
+void displayGroup1();
+void displayGroup2();
 
 // Initialize a 2-dimensional (32 pages x 128 bytes) simulation of PDP-8 memory
 
@@ -128,7 +130,7 @@ int main()
       i = memory[regPC.memPage][regPC.memOffset];
       printf("i: %x\n",i);
       opcode = i >> 9;
-      
+      printf("opcode: %d\n",opcode);
       // treat input line as a memory reference instruction
       if (opcode < 6)
       {
@@ -218,16 +220,18 @@ int main()
         // dealing with a group 1 microinstruction
         if (groupbit == 0)
         {
-           group1.opcode = regIR.opcode;
+           group1.opcode = opcode;
            group1.bit3 = groupbit;
-           group1.cla = (i << 7) & 1;
-           group1.cll = (i << 6) & 1;
-           group1.cma = (i << 5) & 1;
-           group1.cml = (i << 4) & 1;
-           group1.rar = (i << 3) & 1;
-           group1.ral = (i << 2) & 1;
-           group1.rotate = (i << 1) & 1;
+           group1.cla = (i >> 7) & 1;
+           group1.cll = (i >> 6) & 1;
+           group1.cma = (i >> 5) & 1;
+           group1.cml = (i >> 4) & 1;
+           group1.rar = (i >> 3) & 1;
+           group1.ral = (i >> 2) & 1;
+           group1.rotate = (i >> 1) & 1;
            group1.iac = i & 1;
+
+           displayGroup1();
 
            // group 1 microinstructions here
 
@@ -286,6 +290,7 @@ int main()
 
            // group 2 microinstructions here
 
+           displayGroup2();
             
          }
          // we do not handle group 3 instructions, need clock cycles
@@ -462,4 +467,22 @@ int getEffAddr()
           printf("Something's gone badly wrong.");
         }
 	return regCPMA;
+}
+
+void displayGroup1()
+{
+  printf("grp1: op bit3 cla cll cma cml rar ral rot iac\n"
+         "      %-3d %-4d %-4d %-4d %-4d %-4d %-4d %-4d %-4d\n",
+         group1.opcode, group1.bit3, group1.cla, group1.cll,
+         group1.cma, group1.cml, group1.rar, group1.ral,
+         group1.rotate, group1.iac);
+}
+
+void displayGroup2()
+{
+  printf("grp2: op bit3 cla sma sza snl rev osr hlt bit11\n"
+         "      %-3d %-4d %-4d %-4d %-4d %-4d %-4d %-4d %-5d\n",
+         group2.opcode, group2.bit3, group2.cla, group2.sma,
+         group2.sza, group2.snl, group2.rev, group2.osr,
+         group2.hlt, group2.bit11);
 }
