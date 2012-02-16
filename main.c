@@ -33,23 +33,18 @@ typedef struct {	// holds address of next instruction
 } registerPC;
 
 
-typedef struct {	// holds address of memory insertion
-  int addr;
-  int memPage;
-  int memOffset;
-} registerCPMA;
-
 typedef struct {	// struct .linkbit = 0, .accbits = 0-11
   int linkbit;
   int accbits;
 } registerAC;
 
 typedef struct {	// memory instruction register
+  int addr;
   int opcode;
   int indirectBit;
   int memPageBit;
   int offset;
-} registerMRI;
+} registerIR;
 
 typedef struct {
   int opcode : 3;
@@ -84,16 +79,16 @@ typedef struct {
 
 void updatePC(int i);
 int getOpCode(int instruction);
-void handleMRI(int i);
+void handleIR(int i);
 
 // Initialize a 2-dimensional (32 pages x 128 bytes) simulation of PDP-8 memory
 
 int memory[PAGES][BYTES];
 
-registerCPMA regCPMA;
+registerPC regCPMA;
 registerPC regPC;
 registerAC regAC;
-registerMRI regMRI;
+registerIR regIR;
 
 Group1bitfield group1;
 Group2bitfield group2;
@@ -101,7 +96,6 @@ Group2bitfield group2;
 forTracefile trace;
 
 int regSwitch;	// used to load memory from console
-int regIR;      // holds opcode of current instruction
 
 int memPage;	// which of the 32 pages in memory
 int memOffset;	// which 128 12-bit word on that page
@@ -119,21 +113,22 @@ int main()
   // parse the input file and store instructions/data in memory as directed
   loadAllTheThings();
 
-  // starting from the address in the PC, use assembly file to make tracefile
+  // starting from the first address, use assembly file to make tracefile
 
   int i;
-  regIR = regMRI.opcode;
-  regPC.addr = i;
+  i = regIR.addr;
   
-  // input line is not a memory reference instruction
-  countInstr++;
-  regMRI.opcode = i >> 9;
-       if (regMRI.opcode == 6)
+  while (group2.hlt != 1)
+  {
+      // input line is not a memory reference instruction
+      countInstr++;
+      regIR.opcode = i >> 9;
+      if (regIR.opcode == 6)
       {
          countIO++;
          printf("Warning: an I/O instruction was not simulated.\n");
       }
-      else if (regMRI.opcode == 7)
+      else if (regIR.opcode == 7)
       {
         count7++;
         countClock++;
@@ -144,7 +139,7 @@ int main()
         // dealing with a group 1 microinstruction
         if (groupbit == 0)
         {
-           group1.opcode = regMRI.opcode;
+           group1.opcode = regIR.opcode;
            group1.bit3 = groupbit;
            group1.cla = (i << 7) & 1;
            group1.cll = (i << 6) & 1;
@@ -199,7 +194,7 @@ int main()
         // dealing with a group 2 microinstruction
         else if (groupbit == 1 && bit11 == 0)
         {
-           group2.opcode = regMRI.opcode;
+           group2.opcode = regIR.opcode;
            group2.bit3 = groupbit;
            group2.cla = (i << 7) & 1;
            group2.sma = (i << 6) & 1;
@@ -222,46 +217,46 @@ int main()
       }
 
       // input line is just wrong
-      else if (regMRI.opcode > 7)
+      else if (regIR.opcode > 7)
       {
-         printf("opcode %d is greater than 7\n",regMRI.opcode);
+         printf("opcode %d is greater than 7\n",regIR.opcode);
       }
 
       // treat input line as a memory reference instruction
       else
       { 
-        handleMRI(i);
-        if (regMRI.memPageBit == 0 && regMRI.indirectBit == 1)
+        handleIR(i);
+        if (regIR.memPageBit == 0 && regIR.indirectBit == 1)
         {
-          regCPMA = 0x0 + regMRI.offset;
+          regCPMA = 0x0 + regIR.offset;
         }
-        else if (regMRI.memPageBit == 1 && regMRI.indirectBit == 1)
+        else if (regIR.memPageBit == 1 && regIR.indirectBit == 1)
         {
-          regCPMA = regPC.addr & regMRI.offset;
+          regCPMA = regPC.addr & regIR.offset;
         }
-        else if (regMRI.memPageBit == 1 && regMRI.indirectBit == 0)
+        else if (regIR.memPageBit == 1 && regIR.indirectBit == 0)
         {
-          regCPMA = memory[regPC.memPage][regMRI.offset];
+          regCPMA = memory[regPC.memPage][regIR.offset];
         }
-        else if (regMRI.memPageBit == 0 && regMRI.indirectBit == 0)
+        else if (regIR.memPageBit == 0 && regIR.indirectBit == 0)
         {
-          if (0x8 < regMRI.offset < 0xf)
+          if (0x8 < regIR.offset < 0xf)
           {
-            regCPMA = memory[0][regMRI.offset]++;
+            regCPMA = memory[0][regIR.offset]++;
             countClock = countClock + 2;
           }
           else
           {
-            regCPMA = memory[0][regMRI.offset];
+            regCPMA = memory[0][regIR.offset];
             countClock++;
           }
         }
-        else if (regMRI.memPageBit > 1 || regMRI.indirectBit > 1)
+        else if (regIR.memPageBit > 1 || regIR.indirectBit > 1)
         {
           printf("Something's gone badly wrong.");
         }
 
-        switch (regMRI.opcode)
+        switch (regIR.opcode)
         {
           case 0:
             countAND++;
@@ -324,13 +319,12 @@ int main()
         fprintf(ofp,"%d %o\n",trace.n,trace.addr);
         fflush(ofp);
 
-      } // end MRI handling
+      } // end IR handling
 
     } // end instruction handling
 
   } // end while loop
 
-  fclose(ifp);
   fclose(ofp);
 
   printf("Total clock cycles: %d\n",countClock);
@@ -358,11 +352,12 @@ int getOpCode(int instruction)
   return opcode;
 }
 
-void handleMRI(int i)
+void handleIR(int i)
 {
-  regMRI.indirectBit = (i >> 8) & 1;
-  regMRI.memPageBit = (i >> 7) & 1;
-  regMRI.offset = i & 0x7f;
+  regIR.addr = i;
+  regIR.indirectBit = (i >> 8) & 1;
+  regIR.memPageBit = (i >> 7) & 1;
+  regIR.offset = i & 0x7f;
 }
 
 int getHex(int num)
@@ -402,6 +397,7 @@ void loadAllTheThings()
       if (count == 1)
       {	
          updatePC(i);
+         handleIR(i);
       }
       // the second @ represents the address of the first data line
       else if (count == 2)
@@ -440,4 +436,5 @@ void loadAllTheThings()
          printf("The first line of the input file did not contain an @.");
       }
   }
+  fclose(ifp);
 }
