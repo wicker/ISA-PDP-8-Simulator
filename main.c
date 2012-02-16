@@ -78,9 +78,8 @@ typedef struct {
 } forTracefile;
 
 int loadAllTheThings();
-int updatePC(int i);
-int getOpCode(int instruction);
-int handleIR(int i);
+int updatePC(int);
+int handleIR(int);
 int getEffAddr();
 
 // Initialize a 2-dimensional (32 pages x 128 bytes) simulation of PDP-8 memory
@@ -109,27 +108,93 @@ int main()
   ofp = fopen("tracefile.din", "a");
 
   // parse the input file and store instructions/data in memory as directed
-  int x;
-  x = loadAllTheThings();
-  printf("x = %d\n",x);
+  loadAllTheThings();
 
   // starting from the first address, use assembly file to make tracefile
   int i;
-  i = regIR.addr;
-  x = updatePC(i);
-  printf("x = %d\n",x);
+  i = regIR.addr; // from where we saved it during the load
+  updatePC(i); // PC now has the address of the first instruction
+  handleIR(memory[regPC.memPage][regPC.memOffset]);
+  printf("regIR.opcode = %d\n",regIR.opcode);
 
   int carryout; // still no idea what this is
  
   // while the instruction is not a halt, follow instructions
   printf("group2.hlt = %d\n",group2.hlt);
-  while (group2.hlt != 0)
+  while (group2.hlt != 1)
   {
       countInstr++;
 
+      // treat input line as a memory reference instruction
+      if (regIR.opcode < 6)
+      {
+        handleIR(i);
+        regCPMA = getEffAddr();
+        updatePC(regCPMA);
+        switch (regIR.opcode)
+        {
+          case 0:
+            countAND++;
+            countClock = countClock + 2;
+            regAC.accbits = regCPMA & regAC.accbits;
+            trace.n = 0;
+            trace.addr = regCPMA;
+            break;
+          case 1:
+            countTAD++;
+            countClock = countClock + 2;
+            regCPMA = -regCPMA;
+            regAC.accbits = regCPMA & regAC.accbits;
+            if (carryout)
+               regAC.linkbit = -regAC.linkbit; 
+            trace.n = 0;
+            trace.addr = regCPMA;
+            break;
+          case 2:
+            countClock = countClock + 2;
+            countISZ++;
+            if (regCPMA == 0)
+            {
+               regPC.addr++;
+               updatePC(regPC.addr);
+            }
+            else
+               regCPMA++;
+            trace.n = 1;
+            trace.addr = regCPMA;
+            break;
+          case 3:
+            countClock = countClock + 2;
+            countDCA++;
+            regCPMA = regAC.accbits;
+            regAC.accbits = 0;
+            regAC.linkbit = 0;
+            trace.n = 1;
+            trace.addr = regCPMA;
+            break;
+          case 4:
+            countClock = countClock + 2;
+            countJMS++;
+            regCPMA = regPC.addr;
+            regPC.addr = regCPMA++;
+            updatePC(regPC.addr);
+            trace.n = 1;
+            trace.addr = regCPMA;
+            break;
+          case 5:
+            countJMP++;
+            countClock++;
+            regPC.addr = regCPMA;
+            updatePC(regPC.addr);
+            trace.n = 2;
+            trace.addr = regCPMA;
+            break;
+        } // end switch 
+
+      }
+
       // input line is an I/O instruction (not handled here)
-      printf("regIR.opcode = %d\n",regIR.opcode);
-      if (regIR.opcode == 6)
+      else if (regIR.opcode == 6)
       {
          countIO++;
          printf("Warning: an I/O instruction was not simulated.\n");
@@ -215,7 +280,7 @@ int main()
 
            // group 2 microinstructions here
 
-           
+            
          }
          // we do not handle group 3 instructions, need clock cycles
          else
@@ -230,76 +295,10 @@ int main()
          printf("opcode %d is greater than 7\n",regIR.opcode);
       }
 
-      // treat input line as a memory reference instruction
-      else
-      {
-        handleIR(i);
-        regCPMA = getEffAddr();
-        updatePC(regCPMA);
-        switch (regIR.opcode)
-        {
-          case 0:
-            countAND++;
-            countClock = countClock + 2;
-            regAC.accbits = regCPMA & regAC.accbits;
-            trace.n = 0;
-            trace.addr = regCPMA;
-            break;
-          case 1:
-            countTAD++;
-            countClock = countClock + 2;
-            regCPMA = -regCPMA;
-            regAC.accbits = regCPMA & regAC.accbits;
-            if (carryout)
-               regAC.linkbit = -regAC.linkbit; 
-            trace.n = 0;
-            trace.addr = regCPMA;
-            break;
-          case 2:
-            countClock = countClock + 2;
-            countISZ++;
-            if (regCPMA == 0)
-            {
-               regPC.addr++;
-               updatePC(regPC.addr);
-            }
-            else
-               regCPMA++;
-            trace.n = 1;
-            trace.addr = regCPMA;
-            break;
-          case 3:
-            countClock = countClock + 2;
-            countDCA++;
-            regCPMA = regAC.accbits;
-            regAC.accbits = 0;
-            regAC.linkbit = 0;
-            trace.n = 1;
-            trace.addr = regCPMA;
-            break;
-          case 4:
-            countClock = countClock + 2;
-            countJMS++;
-            regCPMA = regPC.addr;
-            regPC.addr = regCPMA++;
-            updatePC(regPC.addr);
-            trace.n = 1;
-            trace.addr = regCPMA;
-            break;
-          case 5:
-            countJMP++;
-            countClock++;
-            regPC.addr = regCPMA;
-            updatePC(regPC.addr);
-            trace.n = 2;
-            trace.addr = regCPMA;
-            break;
-        } // end switch 
+    fprintf(ofp,"%d %o\n",trace.n,trace.addr);
+    fflush(ofp);
 
-        fprintf(ofp,"%d %o\n",trace.n,trace.addr);
-        fflush(ofp);
-
-      } // end IR handling
+      
 
   } // end while loop
 
@@ -323,13 +322,6 @@ int updatePC(int i)
   regPC.memOffset = i & 0x7f;
 }
 
-int getOpCode(int instruction)
-{
-  int opcode;
-  opcode = 0;
-  return opcode;
-}
-
 int handleIR(int i)
 {
   regIR.addr = i;
@@ -337,6 +329,7 @@ int handleIR(int i)
   regIR.indirectBit = (i >> 8) & 1;
   regIR.memPageBit = (i >> 7) & 1;
   regIR.offset = i & 0x7f;
+  regIR.opcode = i >> 9;
 }
 
 int getHex(int num)
