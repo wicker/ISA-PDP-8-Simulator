@@ -32,6 +32,13 @@ typedef struct {	// holds address of next instruction
   int memOffset;
 } registerPC;
 
+
+typedef struct {	// holds address of memory insertion
+  int addr;
+  int memPage;
+  int memOffset;
+} registerCPMA;
+
 typedef struct {	// struct .linkbit = 0, .accbits = 0-11
   int linkbit;
   int accbits;
@@ -83,6 +90,7 @@ void handleMRI(int i);
 
 int memory[PAGES][BYTES];
 
+registerCPMA regCPMA;
 registerPC regPC;
 registerAC regAC;
 registerMRI regMRI;
@@ -92,13 +100,8 @@ Group2bitfield group2;
 
 forTracefile trace;
 
-int regCPMA;	// holds address to be read/written from/to memory
-
-int regMemBuff;	// holds value read from memory OR value to be written
 int regSwitch;	// used to load memory from console
-
-int signalRead;		// de-asserted 0, asserted 1
-int signalWrite;	// de-asserted 0, asserted 1
+int regIR;      // holds opcode of current instruction
 
 int memPage;	// which of the 32 pages in memory
 int memOffset;	// which 128 12-bit word on that page
@@ -110,37 +113,22 @@ int main()
   memset(memory, 0, sizeof(int));
 
   // open the tracefile, make it available to 'r' read
-  // open the output file to make it available to append each iteration's result
-  ifp = fopen("test.mem", "r");
+  // open the output file to append each iteration's result
   ofp = fopen("tracefile.din", "a");
 
-  // set it up to read line by line, set n and addr accordingly
-  int i;
-  int carryout; // need to define/fix this
-  char input[5];
+  // parse the input file and store instructions/data in memory as directed
+  loadAllTheThings();
 
-  while (fscanf(ifp, "%s\n", &input) != EOF)
-  {
-    // treat input line as an address
-    if (input[0] == '@')
-    {
-      int input1 = getHex(input[1]);
-      int input2 = getHex(input[2]);
-      int input3 = getHex(input[3]);
-      i = input1*256 + input2*16 + input3;
-      updatePC(i);
-    }
-    // treat input line as an instruction
-    else 
-    {
-      countInstr++;
-      int input1 = getHex(input[0]);
-      int input2 = getHex(input[1]);
-      int input3 = getHex(input[2]);
-      i = input1*256 + input2*16 + input3;
-      regMRI.opcode = i >> 9;
-      // input line is not a memory reference instruction
-      if (regMRI.opcode == 6)
+  // starting from the address in the PC, use assembly file to make tracefile
+
+  int i;
+  regIR = regMRI.opcode;
+  regPC.addr = i;
+  
+  // input line is not a memory reference instruction
+  countInstr++;
+  regMRI.opcode = i >> 9;
+       if (regMRI.opcode == 6)
       {
          countIO++;
          printf("Warning: an I/O instruction was not simulated.\n");
@@ -387,4 +375,69 @@ int getHex(int num)
      return num - 55;
   else
      return -1;
+}
+
+void loadAllTheThings()
+{
+  int count;
+  int input1;
+  int input2;
+  int input3;
+  int i;
+  char input[5];
+
+  ifp = fopen("test.mem", "r");
+  while (fscanf(ifp, "%s\n", &input) != EOF)
+  {
+    // treat input line as an address
+    if (input[0] == '@')
+    { 
+      count++;
+      // get the address in hex
+      input1 = getHex(input[1]);
+      input2 = getHex(input[2]);
+      input3 = getHex(input[3]);
+      i = input1*256 + input2*16 + input3;
+      // the first @ represents the address of the first instruction
+      if (count == 1)
+      {	
+         updatePC(i);
+      }
+      // the second @ represents the address of the first data line
+      else if (count == 2)
+      {
+         updateCPMA(i);
+      }
+      else 
+      {
+         printf("This is the third @ and doesn't follow form.");
+      }
+    // treat input line as an instruction or data line
+    else 
+    {
+      // store the instruction at the correct place in memory
+      if (count == 1)
+      {
+         input1 = getHex(input[0]);
+         input2 = getHex(input[1]);
+         input3 = getHex(input[2]);
+         i = input1*256 + input2*16 + input3;
+         memory[regPC.memPage][regPC.memOffset] = i;
+         updatePC(regPC.addr++);
+      }
+      // store the data line at the correct place in memory
+      else if (count == 2)
+      {
+         input1 = getHex(input[0]);
+         input2 = getHex(input[1]);
+         input3 = getHex(input[2]);
+         i = input1*256 + input2*16 + input3;
+         memory[regCPMA.memPage][regCPMA.memOffset] = i;
+         updateCPMA(regCPMA.addr++); 
+      }
+      else 
+      {
+         printf("The first line of the input file did not contain an @.");
+      }
+  }
 }
