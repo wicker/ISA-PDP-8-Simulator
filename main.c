@@ -43,6 +43,7 @@ typedef struct {	// memory instruction register
   int opcode;
   int indirectBit;
   int memPageBit;
+  int page;
   int offset;
 } registerIR;
 
@@ -77,6 +78,7 @@ typedef struct {
   int addr;
 } forTracefile;
 
+void loadAllTheThings();
 void updatePC(int i);
 int getOpCode(int instruction);
 void handleIR(int i);
@@ -85,7 +87,6 @@ void handleIR(int i);
 
 int memory[PAGES][BYTES];
 
-registerPC regCPMA;
 registerPC regPC;
 registerAC regAC;
 registerIR regIR;
@@ -95,10 +96,7 @@ Group2bitfield group2;
 
 forTracefile trace;
 
-int regSwitch;	// used to load memory from console
-
-int memPage;	// which of the 32 pages in memory
-int memOffset;	// which 128 12-bit word on that page
+int regCPMA;
 
 FILE *ifp,*ofp;
 
@@ -114,20 +112,25 @@ int main()
   loadAllTheThings();
 
   // starting from the first address, use assembly file to make tracefile
-
   int i;
   i = regIR.addr;
-  
+  updatePC(i);
+
+  int carryout; // still no idea what this is
+ 
+  // while the instruction is not a halt, follow instructions
   while (group2.hlt != 1)
   {
-      // input line is not a memory reference instruction
       countInstr++;
-      regIR.opcode = i >> 9;
+
+      // input line is an I/O instruction (not handled here)
       if (regIR.opcode == 6)
       {
          countIO++;
          printf("Warning: an I/O instruction was not simulated.\n");
       }
+
+      // input line is a group 1, 2, or 3 microinstruction
       else if (regIR.opcode == 7)
       {
         count7++;
@@ -191,9 +194,9 @@ int main()
               regAC.accbits++;
            }
          }
-        // dealing with a group 2 microinstruction
-        else if (groupbit == 1 && bit11 == 0)
-        {
+         // dealing with a group 2 microinstruction
+         else if (groupbit == 1 && bit11 == 0)
+         {
            group2.opcode = regIR.opcode;
            group2.bit3 = groupbit;
            group2.cla = (i << 7) & 1;
@@ -208,15 +211,15 @@ int main()
            // group 2 microinstructions here
 
            
-        }
-        // this is a nop, add in clock cycles as appropriate
-        else
-        {
-          printf("nope"); 
-        }
-      }
+         }
+         // we do not handle group 3 instructions, need clock cycles
+         else
+         {
+           printf("nope"); 
+         }
+      } // end opcode 7
 
-      // input line is just wrong
+      // if input line is just wrong
       else if (regIR.opcode > 7)
       {
          printf("opcode %d is greater than 7\n",regIR.opcode);
@@ -226,18 +229,23 @@ int main()
       else
       { 
         handleIR(i);
+        // calculate the effective address, store in regCPMA
+        // zero page, indirection
         if (regIR.memPageBit == 0 && regIR.indirectBit == 1)
         {
-          regCPMA = 0x0 + regIR.offset;
+          regCPMA = memory[0][regIR.offset];
         }
+        // current page, indirection
         else if (regIR.memPageBit == 1 && regIR.indirectBit == 1)
         {
-          regCPMA = regPC.addr & regIR.offset;
+          regCPMA = memory[regIR.page][regIR.offset];
         }
+        // current page, no indirection
         else if (regIR.memPageBit == 1 && regIR.indirectBit == 0)
         {
-          regCPMA = memory[regPC.memPage][regIR.offset];
+          regCPMA = regIR.page + regIR.offset;
         }
+        // zero page, autoindexing (registers 0010o-0017o)
         else if (regIR.memPageBit == 0 && regIR.indirectBit == 0)
         {
           if (0x8 < regIR.offset < 0xf)
@@ -255,6 +263,8 @@ int main()
         {
           printf("Something's gone badly wrong.");
         }
+
+        updatePC(regCPMA);
 
         switch (regIR.opcode)
         {
@@ -321,8 +331,6 @@ int main()
 
       } // end IR handling
 
-    } // end instruction handling
-
   } // end while loop
 
   fclose(ofp);
@@ -355,6 +363,7 @@ int getOpCode(int instruction)
 void handleIR(int i)
 {
   regIR.addr = i;
+  regIR.page = i >> 7;
   regIR.indirectBit = (i >> 8) & 1;
   regIR.memPageBit = (i >> 7) & 1;
   regIR.offset = i & 0x7f;
@@ -402,12 +411,13 @@ void loadAllTheThings()
       // the second @ represents the address of the first data line
       else if (count == 2)
       {
-         updateCPMA(i);
+         updatePC(i);
       }
       else 
       {
          printf("This is the third @ and doesn't follow form.");
       }
+    }
     // treat input line as an instruction or data line
     else 
     {
@@ -422,19 +432,23 @@ void loadAllTheThings()
          updatePC(regPC.addr++);
       }
       // store the data line at the correct place in memory
+      // using PC here
       else if (count == 2)
       {
          input1 = getHex(input[0]);
          input2 = getHex(input[1]);
          input3 = getHex(input[2]);
          i = input1*256 + input2*16 + input3;
-         memory[regCPMA.memPage][regCPMA.memOffset] = i;
-         updateCPMA(regCPMA.addr++); 
+         memory[regPC.memPage][regPC.memOffset] = i;
+         updatePC(regPC.addr++); 
       }
       else 
       {
          printf("The first line of the input file did not contain an @.");
       }
+    }
   }
   fclose(ifp);
 }
+
+
