@@ -123,7 +123,7 @@ int main()
  
   // while the instruction is not a halt, follow instructions
   printf("group2.hlt = %d\n",group2.hlt);
-  while (group2.hlt != 1)
+  while (group2.hlt != 0)
   {
       countInstr++;
 
@@ -371,51 +371,57 @@ int loadAllTheThings()
       input1 = getHex(input[1]);
       input2 = getHex(input[2]);
       input3 = getHex(input[3]);
+      printf("hex: 0x%x%x%x\n",input1,input2,input3);
       i = input1*256 + input2*16 + input3;
+      printf("i: %x\n",i);
       // the first @ represents the address of the first instruction
+      // this is saved in the IR for use at the start of the program
+      // the second @ represents the address of the first data line
+      updatePC(i);
       if (count == 1)
       {	
-         updatePC(i);
-         handleIR(i);
+        handleIR(i);
+        printf("handling IR\n");
       }
-      // the second @ represents the address of the first data line
-      else if (count == 2)
+      else if (count > 2)
       {
-         updatePC(i);
+         printf("Everything after the third @ is ignored; the program will now execute.\n\n");
+         printf("regIR.addr = %x\n",regIR.addr);
+         break;
       }
-      else 
-      {
-         printf("This is the third @ and doesn't follow form.");
-      }
-    }
+    } // end address store
     // treat input line as an instruction or data line
     else 
     {
       // store the instruction or data at the correct place in memory
+         if (count == 0)
+         {
+            printf("The first line of the input file did not contain an @.\n");
+	    break;
+         }
          input1 = getHex(input[0]);
          input2 = getHex(input[1]);
          input3 = getHex(input[2]);
          i = input1*256 + input2*16 + input3;
          memory[regPC.memPage][regPC.memOffset] = i;
-         updatePC(regPC.addr++);
+         updatePC(regPC.addr + 1);
+         printf("regPC.addr: %x\n regIR.addr: %x\n",regPC.addr,regIR.addr);
 
-      if (count == 0)
-      {
-         printf("The first line of the input file did not contain an @.");
-      }
-    }
+    } // end instruction store
   }
-        int x = 0;
-        int y = 0;
-        for (x; x < 30; x++)
-           {  
-              printf("%d: ",x);
-              for (y; y < 120; y++)
-              { 
-                 printf("%d ",memory[i][y]);
-              }
-              printf("\n");
-           }
+  /* display for testing */
+  printf("Contents of the first pages of memory:\n");
+  int p; 
+  int y;
+  for (p = 0; p < 3; p++)
+  {
+    for (y = 0; y < 120; y++)
+    { 
+      printf("%x ",memory[p][y]);
+    }
+    printf("\n\n");
+  }
+        
   fclose(ifp);
   return 0;
 }
