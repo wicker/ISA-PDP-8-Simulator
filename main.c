@@ -90,6 +90,7 @@ int group1If(int,int,int);
 int group2If(int,int,int,int);
 void displayGroup1();
 void displayGroup2();
+void displayMemory();
 
 // Initialize a 2-dimensional (32 pages x 128 bytes) simulation of PDP-8 memory
 
@@ -111,9 +112,6 @@ int main()
 {
   memset(memory, 0, sizeof(int));
 
-  // open the output file to append each iteration's result
-  ofp = fopen("tracefile.din", "a");
-
   // parse the input file and store instructions/data in memory as directed
   loadAllTheThings();
 
@@ -123,22 +121,22 @@ int main()
   int carryout; // still no idea what this is
  
   // while the instruction is not a halt, follow instructions
-  printf("group2.hlt = %d\n",group2.hlt);
   int c;
   int opcode;
-  while (group2.hlt != 1)
+  for (c = 0;c < 2; c++) // testing
+//  while (group2.hlt != 1)
   {
+      // open the output file to append each iteration's result
+      ofp = fopen("tracefile.din", "a");
+
       countInstr++;
 
       i = memory[regPC.page][regPC.offset];
-      printf("i: %x\n",i);
       opcode = i >> 9;
-      printf("opcode: %d\n",opcode);
       // treat input line as a memory reference instruction
       if (opcode < 6)
       {
         handleIR(i);
-        printf("regIR.opcode = %d\n",regIR.opcode);
         getEffAddr();
         switch (regIR.opcode)
         {
@@ -218,9 +216,7 @@ int main()
          countClock++;
          int bit11;
          int groupbit;
-         printf("i: %x\n",i);
          groupbit = (i >> 8) & 1;
-         printf("groupbit: %d\n",groupbit);
          bit11 = i & 1;
          // dealing with a group 1 microinstruction
          if (groupbit == 0)
@@ -230,12 +226,12 @@ int main()
             group2If(i, opcode, groupbit, bit11);
          // we do not handle group 3 instructions, need clock cycles
          else
-           printf("group 3 instructions not supported\n"); 
+           printf("Warning: Group 3 instructions not supported\n");
       } // end opcode 7
 
       // if input line is just wrong
       else if (opcode > 7)
-         printf("opcode %d is greater than 7\n",regIR.opcode);
+         printf("Warning: Opcode %d is greater than 7\n",regIR.opcode);
 
       fprintf(ofp,"%d %o\n",trace.n,trace.addr);
       fflush(ofp);
@@ -244,9 +240,9 @@ int main()
 
   fclose(ofp);
 
-  printf("Total clock cycles: %d\n",countClock);
+  printf("\nTotal clock cycles: %d\n",countClock);
   printf("Total instructions: %d\n",countInstr);
-  printf("Counts: AND, TAD, ISZ, DCA, JMS, JMP, IO, Micro\n"
+  printf("Counts: AND, TAD, ISZ, DCA, JMS, JMP, IO, Micro\n\n"
          "        %-4d %-4d %-4d %-4d %-4d %-4d %-3d %-6d\n",
          countAND,countTAD,countISZ,countDCA,countJMS,countJMP,countIO,count7);
 
@@ -268,7 +264,7 @@ int group1If(int i, int opcode, int groupbit)
    group1.rotate = (i >> 1) & 1;
    group1.iac = i & 1;
 
-   displayGroup1();
+   /* displayGroup1(); */
 
    // group 1 microinstructions
    if (group1.cla == 1) /* clear the accumulator */
@@ -308,7 +304,7 @@ int group2If(int i, int opcode, int groupbit, int bit11)
    group2.hlt = (i >> 1) & 1;
    group2.bit11 = bit11;
 
-   displayGroup2();
+   /* displayGroup2(); */
  
    // group 2 microinstructions here
    if (group2.sma == 1) // skip if regAC < 0
@@ -346,7 +342,9 @@ int group2If(int i, int opcode, int groupbit, int bit11)
    if (group2.cla == 1) // clear accumulator
       updatePC(regPC.addr + 1);
    if (group2.osr == 1) // we don't support this
-      printf("nop to stderror\n");
+   {
+      printf("Warning: Group 2 instruction ORs the SR with the AC; nop.");
+   }
    updatePC(regPC.addr + 1);
    return 0;
 }
@@ -395,6 +393,7 @@ int loadAllTheThings()
   int input3;
   int i;
   char input[5];
+  count = 0;
 
   ifp = fopen("test.mem", "r");
   while (fscanf(ifp, "%s\n", &input) != EOF)
@@ -407,9 +406,7 @@ int loadAllTheThings()
       input1 = getHex(input[1]);
       input2 = getHex(input[2]);
       input3 = getHex(input[3]);
-      printf("hex: 0x%x%x%x\n",input1,input2,input3);
       i = input1*256 + input2*16 + input3;
-      printf("i: %x\n",i);
       // the first @ represents the address of the first instruction
       // this is saved in the IR for use at the start of the program
       // the second @ represents the address of the first data line
@@ -417,12 +414,11 @@ int loadAllTheThings()
       if (count == 1)
       {	
         handleIR(i);
-        printf("handling IR\n");
       }
       else if (count > 2)
       {
-         printf("Everything after the third @ is ignored; the program will now execute.\n\n");
-         printf("regIR.addr = %x\n",regIR.addr);
+         printf("Warning: Input file lines after the third @ were ignored;\n "
+                          "    the program will now execute.\n\n");
          break;
       }
     } // end address store
@@ -432,7 +428,8 @@ int loadAllTheThings()
       // store the instruction or data at the correct place in memory
          if (count == 0)
          {
-            printf("The first line of the input file did not contain an @.\n");
+            printf("Warning: The first line of the input file did not "
+                             "contain an @. Halting program.\n");
 	    break;
          }
          input1 = getHex(input[0]);
@@ -441,23 +438,12 @@ int loadAllTheThings()
          i = input1*256 + input2*16 + input3;
          memory[regPC.page][regPC.offset] = i;
          updatePC(regPC.addr + 1);
-         printf("regPC.addr: %x\n regIR.addr: %x\n",regPC.addr,regIR.addr);
 
     } // end instruction store
   }
-  /* display for testing */
-  printf("Contents of the first pages of memory:\n");
-  int p; 
-  int y;
-  for (p = 0; p < 3; p++)
-  {
-    for (y = 0; y < 120; y++)
-    { 
-      printf("%x ",memory[p][y]);
-    }
-    printf("\n\n");
-  }
-        
+  /* optionally display memory pages for testing */
+  /* displayMemory(); */
+
   fclose(ifp);
   return 0;
 }
@@ -499,6 +485,21 @@ int getEffAddr()
           printf("Something's gone badly wrong.");
         }
 	return 0;
+}
+
+void displayMemory()
+{
+  printf("Contents of the first pages of memory:\n");
+  int p; 
+  int y;
+  for (p = 0; p < 3; p++)
+  {
+    for (y = 0; y < 120; y++)
+    { 
+      printf("%x ",memory[p][y]);
+    }
+    printf("\n\n");
+  }
 }
 
 void displayGroup1()
