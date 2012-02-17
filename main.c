@@ -13,73 +13,38 @@
 #define PAGES 32
 #define BYTES 128
 
-int countClock;	// total number of clock cycles
+/* counters */
 
-int countInstr;	// total number of instructions
+int countAND, countTAD, countISZ, countDCA, countJMS, countJMP;
+int countClock, countInstr, countIO, count7;
 
-int countAND;	// number of times AND was executed
-int countTAD;	// number of times TAD was executed
-int countISZ; 	// number of times ISZ was executed
-int countDCA;	// number of times DCA was executed
-int countJMS;	// number of times JMS was executed
-int countJMP;	// number of times JMP was executed
-int countIO;	// number of times IO was executed
-int count7;	// number of times Micro was executed
+/* registers */
 
-typedef struct {	// holds address of next instruction
-  int addr;
-  int page;
-  int offset;
+typedef struct { // program counter
+  int addr, page, offset;
 } registerPC;
 
-typedef struct {	// struct .link = 0, .addr = 0-11
-  int link;
-  int addr;
+typedef struct { // accumulator
+  int link, addr;
 } registerAC;
 
-typedef struct {	// memory instruction register
-  int addr;
-  int opcode;
-  int indirectBit;
-  int pageBit;
-  int page;
-  int offset;
+typedef struct { // instruction register
+  int addr, opcode, indirectBit, pageBit, page, offset;
 } registerIR;
 
-typedef struct {
-  int opcode;
-  int   bit3;
-  int    cla;
-  int    cll;
-  int    cma;
-  int    cml;
-  int    rar; 
-  int    ral;
-  int rotate;
-  int    iac;
+typedef struct { // bitfield for group one microinstructions
+  int opcode, bit3, cla, cll, cma, cml, rar, ral, rotate, iac;
 } Group1bitfield;
 
-typedef struct {
-  int opcode;
-  int   bit3;
-  int    cla;
-  int    sma;
-  int    spa;
-  int    sna;
-  int    szl;
-  int    sza;
-  int    snl;
-  int    rev;
-  int    skp;
-  int    osr;
-  int    hlt;
-  int  bit11;
+typedef struct { // bitfield for group two microinstructions
+  int opcode, bit3, cla, sma, spa, sna, sza, szl, snl, rev, skp, osr, hlt, bit11;
 } Group2bitfield;
 
-typedef struct {
-  int n;
-  int addr;
+typedef struct { // trace file output
+  int n, addr;
 } forTracefile;
+
+/* functions */
 
 int loadAllTheThings();
 int updateCPMA(int);
@@ -95,6 +60,8 @@ void displayMemory();
 // Initialize a 2-dimensional (32 pages x 128 bytes) simulation of PDP-8 memory
 
 int memory[PAGES][BYTES];
+
+// initialize registers, bitfields, outputs
 
 registerPC regPC;
 registerAC regAC;
@@ -200,17 +167,15 @@ int main()
             break;
         } // end switch 
 
-      }
+      } // end memory reference instruction case
 
-      // input line is an I/O instruction (not handled here)
-      else if (opcode == 6)
+      else if (opcode == 6) // I/O instruction
       {
          countIO++;
          printf("Warning: an I/O instruction was not simulated.\n");
-      }
+      } // end opcode 6
 
-      // input line is a group 1, 2, or 3 microinstruction
-      else if (opcode == 7)
+      else if (opcode == 7) // microinstruction
       {
          count7++;
          countClock++;
@@ -233,7 +198,7 @@ int main()
       else if (opcode > 7)
          printf("Warning: Opcode %d is greater than 7\n",regIR.opcode);
 
-      if (group2.hlt != 1)
+      if (group2.hlt != 1) // don't flush to trace file on halt
       {
          fprintf(ofp,"%d %o\n",trace.n,trace.addr);
          fflush(ofp);
@@ -253,8 +218,7 @@ int main()
   return 0; 
 }
 
-// these functions are all need testing, testing for compiling right now
-
+// handle a group 1 microinstruction
 int group1If(int i, int opcode, int groupbit)
 {
    group1.opcode = opcode;
@@ -295,6 +259,7 @@ int group1If(int i, int opcode, int groupbit)
    return 0;
 }
 
+// handle a group 2 microinstruction
 int group2If(int i, int opcode, int groupbit, int bit11)
 {
    group2.opcode = opcode;
@@ -406,7 +371,6 @@ int loadAllTheThings()
     if (input[0] == '@')
     { 
       count++;
-      // get the address in hex
       input1 = getHex(input[1]);
       input2 = getHex(input[2]);
       input3 = getHex(input[3]);
@@ -415,22 +379,20 @@ int loadAllTheThings()
       // this is saved in the IR for use at the start of the program
       // the second @ represents the address of the first data line
       updatePC(i);
-      if (count == 1)
+      if (count == 1) // stored to be given to PC as starting address
       {	
         handleIR(i);
       }
-      else if (count > 2)
+      else if (count > 2) // presence of third @
       {
          printf("Warning: Input file lines after the third @ were ignored;\n "
                           "    the program will now execute.\n\n");
          break;
       }
     } // end address store
-    // treat input line as an instruction or data line
-    else 
+    else // treat input line as an instruction or data line
     {
-      // store the instruction or data at the correct place in memory
-         if (count == 0)
+         if (count == 0) // if no @ in first line, halt
          {
             printf("Warning: The first line of the input file did not "
                              "contain an @. Halting program.\n");
@@ -452,9 +414,8 @@ int loadAllTheThings()
   return 0;
 }
 
-int getEffAddr()
+int getEffAddr() // store the effective address in regCPMA
 {
-        // calculate the effective address, store in regCPMA
         // zero page, indirection
         if (regIR.pageBit == 0 && regIR.indirectBit == 1)
         {
