@@ -32,8 +32,8 @@ typedef struct {	// holds address of next instruction
   int offset;
 } registerPC;
 
-typedef struct {	// struct .linkbit = 0, .addr = 0-11
-  int linkbit;
+typedef struct {	// struct .link = 0, .addr = 0-11
+  int link;
   int addr;
 } registerAC;
 
@@ -152,7 +152,7 @@ int main()
             countClock = countClock + 2;
             regAC.addr = regAC.addr + -memory[regCPMA.page][regCPMA.offset];
             if (carryout) //!!! carryout?
-               regAC.linkbit = -regAC.linkbit;
+               regAC.link = -regAC.link;
             updatePC(regPC.addr + 1); 
             trace.n = 0;
             trace.addr = regCPMA.addr;
@@ -175,7 +175,7 @@ int main()
             countDCA++;
             memory[regCPMA.page][regCPMA.offset] = regAC.addr;
             regAC.addr = 0;
-            regAC.linkbit = 0;
+            regAC.link = 0;
             updatePC(regPC.addr + 1);
             trace.n = 1;
             trace.addr = regCPMA.addr;
@@ -240,7 +240,7 @@ int main()
               regAC.addr = 0;
            }
            if (group1.cll == 1) 
-              regAC.linkbit = 0;
+              regAC.link = 0;
            if (group1.cma == 1)
            {
               /* complement the accumulator */
