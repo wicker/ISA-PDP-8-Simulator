@@ -4,7 +4,9 @@
 clear
 make clean
 make all
-echo "_______________ OUTPUT ____________________"
+echo "_____________ TEST FILE ___________________"
+cat test.mem
+echo "______________ WARNINGS ___________________"
 ./main
 echo "__________ GENERATED TRACEFILE ____________"
 cat tracefile.din

@@ -240,10 +240,11 @@ int main()
 
   fclose(ofp);
 
+  printf("\n_______________ OUTPUT ____________________\n");
   printf("\nTotal clock cycles: %d\n",countClock);
   printf("Total instructions: %d\n",countInstr);
   printf("Counts: AND, TAD, ISZ, DCA, JMS, JMP, IO, Micro\n\n"
-         "        %-4d %-4d %-4d %-4d %-4d %-4d %-3d %-6d\n",
+         "        %-4d %-4d %-4d %-4d %-4d %-4d %-3d %-6d\n\n",
          countAND,countTAD,countISZ,countDCA,countJMS,countJMP,countIO,count7);
 
   return 0; 
