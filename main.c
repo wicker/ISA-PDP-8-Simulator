@@ -28,20 +28,20 @@ int count7;	// number of times Micro was executed
 
 typedef struct {	// holds address of next instruction
   int addr;
-  int memPage;
-  int memOffset;
+  int page;
+  int offset;
 } registerPC;
 
-typedef struct {	// struct .linkbit = 0, .accbits = 0-11
+typedef struct {	// struct .linkbit = 0, .addr = 0-11
   int linkbit;
-  int accbits;
+  int addr;
 } registerAC;
 
 typedef struct {	// memory instruction register
   int addr;
   int opcode;
   int indirectBit;
-  int memPageBit;
+  int pageBit;
   int page;
   int offset;
 } registerIR;
@@ -60,16 +60,16 @@ typedef struct {
 } Group1bitfield;
 
 typedef struct {
-  int  opcode;
-  int    bit3;
-  int     cla;
-  int     sma;
-  int     sza;
-  int     snl;
-  int     rev;
-  int     osr;
-  int     hlt;
-  int   bit11;
+  int opcode;
+  int   bit3;
+  int    cla;
+  int    sma;
+  int    sza;
+  int    snl;
+  int    rev;
+  int    osr;
+  int    hlt;
+  int  bit11;
 } Group2bitfield;
 
 typedef struct {
@@ -78,6 +78,7 @@ typedef struct {
 } forTracefile;
 
 int loadAllTheThings();
+int updateCPMA(int);
 int updatePC(int);
 int handleIR(int);
 int getEffAddr();
@@ -91,13 +92,12 @@ int memory[PAGES][BYTES];
 registerPC regPC;
 registerAC regAC;
 registerIR regIR;
+registerPC regCPMA;
 
 Group1bitfield group1;
 Group2bitfield group2;
 
 forTracefile trace;
-
-int regCPMA;
 
 FILE *ifp,*ofp;
 
@@ -127,75 +127,75 @@ int main()
   {
       countInstr++;
 
-      i = memory[regPC.memPage][regPC.memOffset];
+      i = memory[regPC.page][regPC.offset];
       printf("i: %x\n",i);
       opcode = i >> 9;
       printf("opcode: %d\n",opcode);
       // treat input line as a memory reference instruction
       if (opcode < 6)
       {
-        i = memory[regPC.memPage][regPC.memOffset];
         handleIR(i);
         printf("regIR.opcode = %d\n",regIR.opcode);
-        regCPMA = getEffAddr();
-        updatePC(regCPMA);
+        getEffAddr();
         switch (regIR.opcode)
         {
           case 0:
             countAND++;
             countClock = countClock + 2;
-            regAC.accbits = regCPMA & regAC.accbits;
+            regAC.addr = regAC.addr & memory[regCPMA.page][regCPMA.offset];
+            updatePC(regPC.addr + 1);
             trace.n = 0;
-            trace.addr = regCPMA;
+            trace.addr = regCPMA.addr;
             break;
           case 1:
             countTAD++;
             countClock = countClock + 2;
-            regCPMA = -regCPMA;
-            regAC.accbits = regCPMA & regAC.accbits;
-            if (carryout)
-               regAC.linkbit = -regAC.linkbit; 
+            regAC.addr = regAC.addr + -memory[regCPMA.page][regCPMA.offset];
+            if (carryout) //!!! carryout?
+               regAC.linkbit = -regAC.linkbit;
+            updatePC(regPC.addr + 1); 
             trace.n = 0;
-            trace.addr = regCPMA;
+            trace.addr = regCPMA.addr;
             break;
           case 2:
             countClock = countClock + 2;
             countISZ++;
-            if (regCPMA == 0)
+            memory[regCPMA.page][regCPMA.offset] = memory[regCPMA.page][regCPMA.offset] + 1;
+            if (memory[regCPMA.page][regCPMA.offset] == 0)
             {
-               regPC.addr++;
+               regPC.addr = regPC.addr + 1;
                updatePC(regPC.addr);
             }
-            else
-               regCPMA++;
+            regPC.addr = regPC.addr;
             trace.n = 1;
-            trace.addr = regCPMA;
+            trace.addr = regCPMA.addr;
             break;
           case 3:
             countClock = countClock + 2;
             countDCA++;
-            regCPMA = regAC.accbits;
-            regAC.accbits = 0;
+            memory[regCPMA.page][regCPMA.offset] = regAC.addr;
+            regAC.addr = 0;
             regAC.linkbit = 0;
+            updatePC(regPC.addr + 1);
             trace.n = 1;
-            trace.addr = regCPMA;
+            trace.addr = regCPMA.addr;
             break;
           case 4:
             countClock = countClock + 2;
             countJMS++;
-            regCPMA = regPC.addr;
-            regPC.addr = regCPMA++;
+            updateCPMA(regPC.addr);
+            regPC.addr = regCPMA.addr + 1;
             updatePC(regPC.addr);
             trace.n = 1;
-            trace.addr = regCPMA;
+            trace.addr = regCPMA.addr;
             break;
           case 5:
             countJMP++;
             countClock++;
-            regPC.addr = regCPMA;
+            regPC.addr = regCPMA.addr;
             updatePC(regPC.addr);
             trace.n = 2;
-            trace.addr = regCPMA;
+            trace.addr = regCPMA.addr;
             break;
         } // end switch 
 
@@ -211,15 +211,15 @@ int main()
       // input line is a group 1, 2, or 3 microinstruction
       else if (opcode == 7)
       {
-        count7++;
-        countClock++;
-        int bit11;
-        int groupbit;
-        groupbit = (i << 8) & 1;
-        bit11 = i & 1;
-        // dealing with a group 1 microinstruction
-        if (groupbit == 0)
-        {
+         count7++;
+         countClock++;
+         int bit11;
+         int groupbit;
+         groupbit = (i << 8) & 1;
+         bit11 = i & 1;
+         // dealing with a group 1 microinstruction
+         if (groupbit == 0)
+         {
            group1.opcode = opcode;
            group1.bit3 = groupbit;
            group1.cla = (i >> 7) & 1;
@@ -237,41 +237,42 @@ int main()
 
            if (group1.cla == 1)
            {
-              regAC.accbits = 0;
+              regAC.addr = 0;
            }
            if (group1.cll == 1) 
               regAC.linkbit = 0;
            if (group1.cma == 1)
            {
               /* complement the accumulator */
+              printf("complement the accumulator\n");
            }
            if (group1.rar == 1)
            {
               if (group1.rotate == 0)
                  /* rotate right 1 place */
-                 { printf("1"); }
+                 { printf("rotate right 1\n"); }
               else
                  /* rotate right 2 places */
-                 { printf("1"); }
+                 { printf("rotate left 1\n"); }
            }
            if (group1.ral == 1)
            {
               if (group1.rotate == 0)
                  /* rotate left 1 place */
               { 
-                 printf("1");
+                 printf("rotate left 1\n");
                  
               }
               else
                  /* rotate left 2 places */
               { 
-                 printf("1");
+                 printf("rotate right 1\n");
  
               }
            }
            if (group1.iac == 1)
            {
-              regAC.accbits++;
+              regAC.addr++;
            }
          }
          // dealing with a group 2 microinstruction
@@ -309,8 +310,6 @@ int main()
     fprintf(ofp,"%d %o\n",trace.n,trace.addr);
     fflush(ofp);
 
-      
-
   } // end while loop
 
   fclose(ofp);
@@ -329,8 +328,15 @@ int main()
 int updatePC(int i)
 {
   regPC.addr = i;
-  regPC.memPage = i >> 7;
-  regPC.memOffset = i & 0x7f;
+  regPC.page = i >> 7;
+  regPC.offset = i & 0x7f;
+}
+
+int updateCPMA(int i)
+{
+  regCPMA.addr = i;
+  regCPMA.page = i >> 7;
+  regCPMA.offset = i & 0x7f;
 }
 
 int handleIR(int i)
@@ -338,7 +344,7 @@ int handleIR(int i)
   regIR.addr = i;
   regIR.page = i >> 7;
   regIR.indirectBit = (i >> 8) & 1;
-  regIR.memPageBit = (i >> 7) & 1;
+  regIR.pageBit = (i >> 7) & 1;
   regIR.offset = i & 0x7f;
   regIR.opcode = i >> 9;
 }
@@ -407,7 +413,7 @@ int loadAllTheThings()
          input2 = getHex(input[1]);
          input3 = getHex(input[2]);
          i = input1*256 + input2*16 + input3;
-         memory[regPC.memPage][regPC.memOffset] = i;
+         memory[regPC.page][regPC.offset] = i;
          updatePC(regPC.addr + 1);
          printf("regPC.addr: %x\n regIR.addr: %x\n",regPC.addr,regIR.addr);
 
@@ -434,45 +440,45 @@ int getEffAddr()
 {
         // calculate the effective address, store in regCPMA
         // zero page, indirection
-        if (regIR.memPageBit == 0 && regIR.indirectBit == 1)
+        if (regIR.pageBit == 0 && regIR.indirectBit == 1)
         {
-          regCPMA = memory[0][regIR.offset];
+          regCPMA.addr = memory[0][regIR.offset];
         }
         // current page, indirection
-        else if (regIR.memPageBit == 1 && regIR.indirectBit == 1)
+        else if (regIR.pageBit == 1 && regIR.indirectBit == 1)
         {
-          regCPMA = memory[regIR.page][regIR.offset];
+          regCPMA.addr = memory[regIR.page][regIR.offset];
         }
         // current page, no indirection
-        else if (regIR.memPageBit == 1 && regIR.indirectBit == 0)
+        else if (regIR.pageBit == 1 && regIR.indirectBit == 0)
         {
-          regCPMA = regIR.page + regIR.offset;
+          regCPMA.addr = regIR.page + regIR.offset;
         }
         // zero page, autoindexing (registers 0010o-0017o)
-        else if (regIR.memPageBit == 0 && regIR.indirectBit == 0)
+        else if (regIR.pageBit == 0 && regIR.indirectBit == 0)
         {
           if (0x8 < regIR.offset < 0xf)
           {
-            regCPMA = memory[0][regIR.offset]++;
+            regCPMA.addr = memory[0][regIR.offset]++;
             countClock = countClock + 2;
           }
           else
           {
-            regCPMA = memory[0][regIR.offset];
+            regCPMA.addr = memory[0][regIR.offset];
             countClock++;
           }
         }
-        else if (regIR.memPageBit > 1 || regIR.indirectBit > 1)
+        else if (regIR.pageBit > 1 || regIR.indirectBit > 1)
         {
           printf("Something's gone badly wrong.");
         }
-	return regCPMA;
+	return 0;
 }
 
 void displayGroup1()
 {
   printf("grp1: op bit3 cla cll cma cml rar ral rot iac\n"
-         "      %-3d %-4d %-4d %-4d %-4d %-4d %-4d %-4d %-4d\n",
+         "      %-3d %-4d %-3d %-3d %-3d %-3d %-3d %-3d %-3d %-3d\n",
          group1.opcode, group1.bit3, group1.cla, group1.cll,
          group1.cma, group1.cml, group1.rar, group1.ral,
          group1.rotate, group1.iac);
@@ -481,7 +487,7 @@ void displayGroup1()
 void displayGroup2()
 {
   printf("grp2: op bit3 cla sma sza snl rev osr hlt bit11\n"
-         "      %-3d %-4d %-4d %-4d %-4d %-4d %-4d %-4d %-5d\n",
+         "      %-3d %-4d %-3d %-3d %-3d %-3d %-3d %-3d %-3d %-5d\n",
          group2.opcode, group2.bit3, group2.cla, group2.sma,
          group2.sza, group2.snl, group2.rev, group2.osr,
          group2.hlt, group2.bit11);
