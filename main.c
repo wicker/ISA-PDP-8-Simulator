@@ -123,8 +123,8 @@ int main()
   // while the instruction is not a halt, follow instructions
   int c;
   int opcode;
-  for (c = 0;c < 2; c++) // testing
-//  while (group2.hlt != 1)
+//  for (c = 0;c < 7; c++) // testing
+  while (group2.hlt != 1)
   {
       // open the output file to append each iteration's result
       ofp = fopen("tracefile.din", "a");
@@ -233,8 +233,11 @@ int main()
       else if (opcode > 7)
          printf("Warning: Opcode %d is greater than 7\n",regIR.opcode);
 
-      fprintf(ofp,"%d %o\n",trace.n,trace.addr);
-      fflush(ofp);
+      if (group2.hlt != 1)
+      {
+         fprintf(ofp,"%d %o\n",trace.n,trace.addr);
+         fflush(ofp);
+      }
 
   } // end while loop
 
@@ -456,11 +459,13 @@ int getEffAddr()
         if (regIR.pageBit == 0 && regIR.indirectBit == 1)
         {
           regCPMA.addr = memory[0][regIR.offset];
+          countClock++;
         }
         // current page, indirection
         else if (regIR.pageBit == 1 && regIR.indirectBit == 1)
         {
           regCPMA.addr = memory[regIR.page][regIR.offset];
+          countClock++;
         }
         // current page, no indirection
         else if (regIR.pageBit == 1 && regIR.indirectBit == 0)
