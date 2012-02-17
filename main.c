@@ -64,9 +64,13 @@ typedef struct {
   int   bit3;
   int    cla;
   int    sma;
+  int    spa;
+  int    sna;
+  int    szl;
   int    sza;
   int    snl;
   int    rev;
+  int    skp;
   int    osr;
   int    hlt;
   int  bit11;
@@ -82,6 +86,8 @@ int updateCPMA(int);
 int updatePC(int);
 int handleIR(int);
 int getEffAddr();
+int group1If(int,int,int);
+int group2If(int,int,int,int);
 void displayGroup1();
 void displayGroup2();
 
@@ -105,7 +111,6 @@ int main()
 {
   memset(memory, 0, sizeof(int));
 
-  // open the tracefile, make it available to 'r' read
   // open the output file to append each iteration's result
   ofp = fopen("tracefile.din", "a");
 
@@ -114,16 +119,14 @@ int main()
 
   // starting from the first address, use assembly file to make tracefile
   int i;
-  i = regIR.addr; // from where we saved it during the load
-  updatePC(i); // PC now has the address of the first instruction
-
+  updatePC(regIR.addr); // PC now has the address of the first instruction
   int carryout; // still no idea what this is
  
   // while the instruction is not a halt, follow instructions
   printf("group2.hlt = %d\n",group2.hlt);
   int c;
   int opcode;
-  for (c = 0; c < 1; c++)
+  while (group2.hlt != 1)
   {
       countInstr++;
 
@@ -215,100 +218,27 @@ int main()
          countClock++;
          int bit11;
          int groupbit;
-         groupbit = (i << 8) & 1;
+         printf("i: %x\n",i);
+         groupbit = (i >> 8) & 1;
+         printf("groupbit: %d\n",groupbit);
          bit11 = i & 1;
          // dealing with a group 1 microinstruction
          if (groupbit == 0)
-         {
-           group1.opcode = opcode;
-           group1.bit3 = groupbit;
-           group1.cla = (i >> 7) & 1;
-           group1.cll = (i >> 6) & 1;
-           group1.cma = (i >> 5) & 1;
-           group1.cml = (i >> 4) & 1;
-           group1.rar = (i >> 3) & 1;
-           group1.ral = (i >> 2) & 1;
-           group1.rotate = (i >> 1) & 1;
-           group1.iac = i & 1;
-
-           displayGroup1();
-
-           // group 1 microinstructions here
-
-           if (group1.cla == 1)
-           {
-              regAC.addr = 0;
-           }
-           if (group1.cll == 1) 
-              regAC.link = 0;
-           if (group1.cma == 1)
-           {
-              /* complement the accumulator */
-              printf("complement the accumulator\n");
-           }
-           if (group1.rar == 1)
-           {
-              if (group1.rotate == 0)
-                 /* rotate right 1 place */
-                 { printf("rotate right 1\n"); }
-              else
-                 /* rotate right 2 places */
-                 { printf("rotate left 1\n"); }
-           }
-           if (group1.ral == 1)
-           {
-              if (group1.rotate == 0)
-                 /* rotate left 1 place */
-              { 
-                 printf("rotate left 1\n");
-                 
-              }
-              else
-                 /* rotate left 2 places */
-              { 
-                 printf("rotate right 1\n");
- 
-              }
-           }
-           if (group1.iac == 1)
-           {
-              regAC.addr++;
-           }
-         }
+            group1If(i, opcode, groupbit);
          // dealing with a group 2 microinstruction
          else if (groupbit == 1 && bit11 == 0)
-         {
-           group2.opcode = regIR.opcode;
-           group2.bit3 = groupbit;
-           group2.cla = (i << 7) & 1;
-           group2.sma = (i << 6) & 1;
-           group2.sza = (i << 5) & 1;
-           group2.snl = (i << 4) & 1;
-           group2.rev = (i << 3) & 1; // reverse for spa, sna, szl
-           group2.osr = (i << 2) & 1;
-           group2.hlt = (i << 1) & 1;
-           group2.bit11 = bit11;
-
-           // group 2 microinstructions here
-
-           displayGroup2();
-            
-         }
+            group2If(i, opcode, groupbit, bit11);
          // we do not handle group 3 instructions, need clock cycles
          else
-         {
-           printf("nope"); 
-         }
+           printf("group 3 instructions not supported\n"); 
       } // end opcode 7
 
       // if input line is just wrong
       else if (opcode > 7)
-      {
          printf("opcode %d is greater than 7\n",regIR.opcode);
-      }
 
-    fprintf(ofp,"%d %o\n",trace.n,trace.addr);
-    fflush(ofp);
+      fprintf(ofp,"%d %o\n",trace.n,trace.addr);
+      fflush(ofp);
 
   } // end while loop
 
@@ -324,6 +254,102 @@ int main()
 }
 
 // these functions are all need testing, testing for compiling right now
+
+int group1If(int i, int opcode, int groupbit)
+{
+   group1.opcode = opcode;
+   group1.bit3 = groupbit;
+   group1.cla = (i >> 7) & 1;
+   group1.cll = (i >> 6) & 1;
+   group1.cma = (i >> 5) & 1;
+   group1.cml = (i >> 4) & 1;
+   group1.rar = (i >> 3) & 1;
+   group1.ral = (i >> 2) & 1;
+   group1.rotate = (i >> 1) & 1;
+   group1.iac = i & 1;
+
+   displayGroup1();
+
+   // group 1 microinstructions
+   if (group1.cla == 1) /* clear the accumulator */
+      regAC.addr = 0;
+   if (group1.cll == 1) /* clear the link bit */
+      regAC.link = 0;
+   if (group1.cma == 1) /* complement the accumulator */
+      regAC.addr = ~regAC.addr;
+   if (group1.cml == 1) /* complement the link  */
+      regAC.link = ~regAC.link;
+   if (group1.iac == 1) /* increment the accumulator */
+      regAC.addr = regAC.addr + 1;
+   if (group1.rar == 1 && group1.rotate == 0) /* rotate right 1 place */
+      regAC.addr = (0xfff & (regAC.addr >> 1)) || (regAC.addr << 11);
+   if (group1.rar == 1 && group1.rotate == 1) /* rotate right 2 places */
+      regAC.addr = (0xfff & (regAC.addr >> 2)) || (regAC.addr << 10);
+   if (group1.ral == 1 && group1.rotate == 0) /* rotate left 1 place */
+      regAC.addr = (0xfff & (regAC.addr << 1)) || (regAC.addr >> 11);
+   if (group1.ral == 1 && group1.rotate == 1) /* rotate left 2 places */
+      regAC.addr = (0xfff & (regAC.addr << 2)) || (regAC.addr >> 10);
+   else // no clock cycle for this: no operation
+      countClock--;
+   updatePC(regPC.addr + 1);
+   return 0;
+}
+
+int group2If(int i, int opcode, int groupbit, int bit11)
+{
+   group2.opcode = opcode;
+   group2.bit3 = groupbit;
+   group2.cla = (i >> 7) & 1;
+   group2.sma = (i >> 6) & 1;
+   group2.sza = (i >> 5) & 1;
+   group2.snl = (i >> 4) & 1;
+   group2.rev = (i >> 3) & 1; // reverse for spa, sna, szl
+   group2.osr = (i >> 2) & 1;
+   group2.hlt = (i >> 1) & 1;
+   group2.bit11 = bit11;
+
+   displayGroup2();
+ 
+   // group 2 microinstructions here
+   if (group2.sma == 1) // skip if regAC < 0
+   {
+      if (regAC.addr < 0)
+         updatePC(regPC.addr + 1);
+   }
+   if (group2.sza == 1) // skip if regAC == 0
+   {
+      if (regAC.addr == 0)
+         updatePC(regPC.addr + 1);
+   }
+   if (group2.snl == 1) // skip if link nonzero
+  {
+      if (regAC.link != 0)
+         updatePC(regPC.addr + 1);
+   }
+   if (group2.spa == 1) // skip if regAC > 0
+   {
+      if (regAC.addr > 0)
+         updatePC(regPC.addr + 1);
+   }
+   if (group2.sna == 1) // skip if regAC == 1
+   {
+      if (regAC.addr != 0)
+         updatePC(regPC.addr + 1);
+   }
+   if (group2.szl == 1) // skip if link == 0
+   {
+      if (regAC.link == 0)
+          updatePC(regPC.addr + 1);
+   }
+   if (group2.skp == 1) // skip no matter what
+      updatePC(regPC.addr + 1);
+   if (group2.cla == 1) // clear accumulator
+      updatePC(regPC.addr + 1);
+   if (group2.osr == 1) // we don't support this
+      printf("nop to stderror\n");
+   updatePC(regPC.addr + 1);
+   return 0;
+}
 
 int updatePC(int i)
 {
